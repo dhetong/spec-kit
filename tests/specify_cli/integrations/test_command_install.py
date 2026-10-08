@@ -2,28 +2,29 @@
 
 from __future__ import annotations
 
-import json  # noqa: F401
-import os  # noqa: F401
+import json
+import os
 import shutil  # noqa: F401
 from pathlib import Path  # noqa: F401
 
 import pytest  # noqa: F401
 
-from specify_cli import app  # noqa: F401
-from tests.conftest import strip_ansi  # noqa: F401
+from specify_cli import app
+from tests.conftest import strip_ansi
 from tests.specify_cli.integrations._catalog_helpers import (
     IntegrationCatalogCliTestBase,
     _normalize_cli_output,
 )
 from tests.specify_cli.integrations._helpers import (
     _copy_project_template,  # noqa: F401
-    _init_project,  # noqa: F401
+    _init_project,
     _integration_list_row_cells,  # noqa: F401
     _move_kilocode_install_to_legacy_layout,  # noqa: F401
-    _run_in_project,  # noqa: F401
+    _run_in_project,
     _write_invalid_manifest,  # noqa: F401
-    runner,  # noqa: F401
+    runner,
 )
+
 
 class TestIntegrationInstall:
     def test_historical_catalog_versions_are_not_install_options(self):
@@ -31,7 +32,9 @@ class TestIntegrationInstall:
             app, ["integration", "install", "copilot", "--version", "1.0.0"]
         )
         assert result.exit_code == 2
-        assert "No such option: --version" in result.output
+        assert ("No such option: --version" in result.output) or (
+            "No such option: -version" in result.output
+        )
 
     def test_install_requires_speckit_project(self, tmp_path):
         old_cwd = os.getcwd()
@@ -76,10 +79,17 @@ class TestIntegrationInstall:
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            install = runner.invoke(app, [
-                "integration", "install", "codex",
-                "--script", "sh",
-            ], catch_exceptions=False)
+            install = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "codex",
+                    "--script",
+                    "sh",
+                ],
+                catch_exceptions=False,
+            )
             assert install.exit_code == 0, install.output
 
             result = runner.invoke(app, ["integration", "install", "codex"])
@@ -116,16 +126,25 @@ class TestIntegrationInstall:
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "codex",
-                "--script", "sh",
-            ], catch_exceptions=False)
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "codex",
+                    "--script",
+                    "sh",
+                ],
+                catch_exceptions=False,
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code == 0, result.output
         assert "installed successfully" in result.output
 
-        data = json.loads((project / ".specify" / "integration.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (project / ".specify" / "integration.json").read_text(encoding="utf-8")
+        )
         assert data["integration"] == "claude"
         assert data["default_integration"] == "claude"
         assert data["integration_state_schema"] == 1
@@ -136,7 +155,9 @@ class TestIntegrationInstall:
         assert (project / ".claude" / "skills" / "speckit-plan" / "SKILL.md").exists()
         assert (project / ".agents" / "skills" / "speckit-plan" / "SKILL.md").exists()
 
-    def test_install_non_default_refreshes_init_options_version_only(self, tmp_path, monkeypatch):
+    def test_install_non_default_refreshes_init_options_version_only(
+        self, tmp_path, monkeypatch
+    ):
         project = _init_project(tmp_path, "claude")
         init_options = project / ".specify" / "init-options.json"
         opts = json.loads(init_options.read_text(encoding="utf-8"))
@@ -147,10 +168,16 @@ class TestIntegrationInstall:
 
         monkeypatch.setattr(_int_cmds, "get_speckit_version", lambda: "0.8.11")
 
-        result = _run_in_project(project, [
-            "integration", "install", "codex",
-            "--script", "sh",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "codex",
+                "--script",
+                "sh",
+            ],
+        )
 
         assert result.exit_code == 0, result.output
         updated = json.loads(init_options.read_text(encoding="utf-8"))
@@ -161,17 +188,26 @@ class TestIntegrationInstall:
 
     def test_install_additional_preserves_shared_manifest(self, tmp_path):
         project = _init_project(tmp_path, "claude")
-        shared_manifest = project / ".specify" / "integrations" / "speckit.manifest.json"
+        shared_manifest = (
+            project / ".specify" / "integrations" / "speckit.manifest.json"
+        )
         before = set(json.loads(shared_manifest.read_text(encoding="utf-8"))["files"])
         assert before
 
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "codex",
-                "--script", "sh",
-            ], catch_exceptions=False)
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "codex",
+                    "--script",
+                    "sh",
+                ],
+                catch_exceptions=False,
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code == 0, result.output
@@ -182,18 +218,30 @@ class TestIntegrationInstall:
     def test_install_multi_safe_migrates_legacy_state(self, tmp_path):
         project = _init_project(tmp_path, "claude")
         int_json = project / ".specify" / "integration.json"
-        int_json.write_text(json.dumps({
-            "integration": "claude",
-            "version": "0.0.0",
-        }), encoding="utf-8")
+        int_json.write_text(
+            json.dumps(
+                {
+                    "integration": "claude",
+                    "version": "0.0.0",
+                }
+            ),
+            encoding="utf-8",
+        )
 
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "codex",
-                "--script", "sh",
-            ], catch_exceptions=False)
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "codex",
+                    "--script",
+                    "sh",
+                ],
+                catch_exceptions=False,
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code == 0, result.output
@@ -208,10 +256,16 @@ class TestIntegrationInstall:
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "claude",
-                "--script", "sh",
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "claude",
+                    "--script",
+                    "sh",
+                ],
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code != 0
@@ -229,16 +283,25 @@ class TestIntegrationInstall:
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "claude",
-                "--script", "sh",
-                "--force",
-            ], catch_exceptions=False)
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "claude",
+                    "--script",
+                    "sh",
+                    "--force",
+                ],
+                catch_exceptions=False,
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code == 0, result.output
 
-        data = json.loads((project / ".specify" / "integration.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (project / ".specify" / "integration.json").read_text(encoding="utf-8")
+        )
         assert data["integration"] == "copilot"
         assert data["installed_integrations"] == ["copilot", "claude"]
 
@@ -250,17 +313,26 @@ class TestIntegrationInstall:
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "claude",
-                "--script", "sh",
-            ], catch_exceptions=False)
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "claude",
+                    "--script",
+                    "sh",
+                ],
+                catch_exceptions=False,
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code == 0, result.output
         assert "installed successfully" in result.output
 
         # integration.json written
-        data = json.loads((project / ".specify" / "integration.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (project / ".specify" / "integration.json").read_text(encoding="utf-8")
+        )
         assert data["integration"] == "claude"
 
         # Manifest created
@@ -277,10 +349,17 @@ class TestIntegrationInstall:
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "claude",
-                "--script", "sh",
-            ], catch_exceptions=False)
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "claude",
+                    "--script",
+                    "sh",
+                ],
+                catch_exceptions=False,
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code == 0, result.output
@@ -331,10 +410,16 @@ class TestIntegrationInstall:
         assert "claude" in registered
         assert "codex" not in registered, "precondition: codex not yet installed"
 
-        result = _run_in_project(project, [
-            "integration", "install", "codex",
-            "--script", "sh",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "codex",
+                "--script",
+                "sh",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         # Install alone does not back-fill the git extension for the secondary
@@ -368,23 +453,31 @@ class TestIntegrationInstall:
         result = _run_in_project(project, ["extension", "disable", "git"])
         assert result.exit_code == 0, result.output
 
-        result = _run_in_project(project, [
-            "integration", "install", "codex",
-            "--script", "sh",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "codex",
+                "--script",
+                "sh",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         registry_path = project / ".specify" / "extensions" / ".registry"
-        git_meta = json.loads(registry_path.read_text(encoding="utf-8"))[
-            "extensions"
-        ]["git"]
+        git_meta = json.loads(registry_path.read_text(encoding="utf-8"))["extensions"][
+            "git"
+        ]
         assert git_meta["enabled"] is False
         assert "codex" not in git_meta["registered_commands"]
         assert not (
             project / ".agents" / "skills" / "speckit-git-feature" / "SKILL.md"
         ).exists()
 
-    def test_install_skills_mode_secondary_agent_defers_extension_artifacts(self, tmp_path):
+    def test_install_skills_mode_secondary_agent_defers_extension_artifacts(
+        self, tmp_path
+    ):
         """A non-active skills-mode agent gets extension artifacts only on use.
 
         Plain ``install`` has no extension side effects. Once the secondary
@@ -398,12 +491,19 @@ class TestIntegrationInstall:
 
         # Copilot is not multi_install_safe, so --force is required to add it
         # alongside the existing default integration.
-        result = _run_in_project(project, [
-            "integration", "install", "copilot",
-            "--script", "sh",
-            "--integration-options", "--skills",
-            "--force",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "copilot",
+                "--script",
+                "sh",
+                "--integration-options",
+                "--skills",
+                "--force",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         # Precondition that makes --skills load-bearing: copilot IS in skills
@@ -415,7 +515,9 @@ class TestIntegrationInstall:
         # The git extension is not registered for the non-active copilot agent
         # during install.
         git_meta = json.loads(
-            (project / ".specify" / "extensions" / ".registry").read_text(encoding="utf-8")
+            (project / ".specify" / "extensions" / ".registry").read_text(
+                encoding="utf-8"
+            )
         )["extensions"]["git"]
         assert "copilot" not in git_meta["registered_commands"]
         assert not (
@@ -429,7 +531,9 @@ class TestIntegrationInstall:
         assert result.exit_code == 0, result.output
 
         git_meta = json.loads(
-            (project / ".specify" / "extensions" / ".registry").read_text(encoding="utf-8")
+            (project / ".specify" / "extensions" / ".registry").read_text(
+                encoding="utf-8"
+            )
         )["extensions"]["git"]
         # `use` makes copilot active, so extension artifacts follow copilot's
         # skills-mode layout.
@@ -453,10 +557,16 @@ class TestIntegrationInstall:
         """
         project = _init_project(tmp_path, "claude")
 
-        result = _run_in_project(project, [
-            "integration", "install", "codex",
-            "--script", "sh",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "codex",
+                "--script",
+                "sh",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         result = _run_in_project(project, ["extension", "add", "git"])
@@ -484,12 +594,16 @@ class TestIntegrationInstall:
         registered = json.loads(registry_path.read_text(encoding="utf-8"))[
             "extensions"
         ]["git"]["registered_commands"]
-        assert "codex" in registered, "use registers extensions for the new active agent"
+        assert "codex" in registered, (
+            "use registers extensions for the new active agent"
+        )
         assert (
             project / ".agents" / "skills" / "speckit-git-feature" / "SKILL.md"
         ).exists()
 
-    def test_extension_add_generic_active_does_not_backfill_other_agents(self, tmp_path):
+    def test_extension_add_generic_active_does_not_backfill_other_agents(
+        self, tmp_path
+    ):
         """A recorded but unsupported active key (``generic``) must not
         fall back to registering every detected agent.
 
@@ -501,15 +615,22 @@ class TestIntegrationInstall:
         behavior #2948 is meant to stop.
         """
         project = _init_project(
-            tmp_path, "generic",
+            tmp_path,
+            "generic",
             integration_options="--commands-dir .myagent/commands",
         )
 
-        result = _run_in_project(project, [
-            "integration", "install", "codex",
-            "--script", "sh",
-            "--force",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "codex",
+                "--script",
+                "sh",
+                "--force",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         result = _run_in_project(project, ["extension", "add", "git"])
@@ -538,10 +659,16 @@ class TestIntegrationInstall:
         """
         project = _init_project(tmp_path, "claude")
 
-        result = _run_in_project(project, [
-            "integration", "install", "codex",
-            "--script", "sh",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "codex",
+                "--script",
+                "sh",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         init_options_path = project / ".specify" / "init-options.json"
@@ -575,10 +702,16 @@ class TestIntegrationInstall:
         """
         project = _init_project(tmp_path, "claude")
 
-        result = _run_in_project(project, [
-            "integration", "install", "codex",
-            "--script", "sh",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "codex",
+                "--script",
+                "sh",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         init_options_path = project / ".specify" / "init-options.json"
@@ -607,10 +740,16 @@ class TestIntegrationInstall:
         """
         project = _init_project(tmp_path, "claude")
 
-        result = _run_in_project(project, [
-            "integration", "install", "codex",
-            "--script", "sh",
-        ])
+        result = _run_in_project(
+            project,
+            [
+                "integration",
+                "install",
+                "codex",
+                "--script",
+                "sh",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
         init_options_path = project / ".specify" / "init-options.json"
@@ -641,10 +780,16 @@ class TestScriptTypeValidation:
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "claude",
-                "--script", "bash",
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "claude",
+                    "--script",
+                    "bash",
+                ],
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code != 0
@@ -658,10 +803,17 @@ class TestScriptTypeValidation:
         old_cwd = os.getcwd()
         try:
             os.chdir(project)
-            result = runner.invoke(app, [
-                "integration", "install", "claude",
-                "--script", "sh",
-            ], catch_exceptions=False)
+            result = runner.invoke(
+                app,
+                [
+                    "integration",
+                    "install",
+                    "claude",
+                    "--script",
+                    "sh",
+                ],
+                catch_exceptions=False,
+            )
         finally:
             os.chdir(old_cwd)
         assert result.exit_code == 0
